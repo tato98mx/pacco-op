@@ -7,7 +7,7 @@ signal connected
 signal failed(reason: String)
 
 # >>> CAMBIA ESTO por la URL que te da `wrangler deploy` (usa wss://) <<<
-const SIGNALING_URL := "wss://pacco-signal.TU-SUBDOMINIO.workers.dev"
+const SIGNALING_URL := "wss://pacco-signal.ydfz296yrr.workers.dev"
 const ICE := {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
 
 var ws := WebSocketPeer.new()
@@ -16,6 +16,8 @@ var conns := {}
 var my_id := 0
 var room := ""
 var _done := false
+var remote_ready := {}
+var pending := {}
 
 func _ready() -> void:
 	set_process(false)
@@ -36,6 +38,8 @@ func _connect_ws(role: String) -> void:
 	ws = WebSocketPeer.new()
 	rtc = WebRTCMultiplayerPeer.new()
 	conns.clear()
+	remote_ready.clear()
+	pending.clear()
 	_done = false
 	var err := ws.connect_to_url("%s/ws/%s?role=%s" % [SIGNALING_URL, room, role])
 	if err != OK:
@@ -86,13 +90,30 @@ func _on_msg(m: Dictionary) -> void:
 		"peer_joined":
 			_new_conn(int(m["id"])).create_offer()
 		"offer":
-			_new_conn(int(m["from"])).set_remote_description("offer", m["sdp"])
+			var oid := int(m["from"])
+			_new_conn(oid)
+			_set_remote(oid, "offer", m["sdp"])
 		"answer":
-			if conns.has(int(m["from"])):
-				conns[int(m["from"])].set_remote_description("answer", m["sdp"])
+			var aid := int(m["from"])
+			if conns.has(aid):
+				_set_remote(aid, "answer", m["sdp"])
 		"candidate":
-			if conns.has(int(m["from"])):
-				conns[int(m["from"])].add_ice_candidate(m["media"], int(m["index"]), m["name"])
+			var cid := int(m["from"])
+			if not conns.has(cid):
+				return
+			if remote_ready.get(cid, false):
+				conns[cid].add_ice_candidate(m["media"], int(m["index"]), m["name"])
+			else:
+				var list: Array = pending.get(cid, [])
+				list.append([m["media"], int(m["index"]), m["name"]])
+				pending[cid] = list
+
+func _set_remote(id: int, type: String, sdp: String) -> void:
+	conns[id].set_remote_description(type, sdp)
+	remote_ready[id] = true
+	for c in pending.get(id, []):
+		conns[id].add_ice_candidate(c[0], c[1], c[2])
+	pending.erase(id)
 
 func _reason(r: String) -> String:
 	match r:
@@ -109,3 +130,5 @@ func _on_peer_connected(_id: int) -> void:
 func leave() -> void:
 	multiplayer.multiplayer_peer = null
 	conns.clear()
+	remote_ready.clear()
+	pending.clear()
