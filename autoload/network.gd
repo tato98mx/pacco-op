@@ -1,0 +1,111 @@
+extends Node
+# WebRTC P2P (host = jugador 1) con señalización por WebSocket (Cloudflare Worker).
+# Flujo: host_room() -> código de 4 letras -> el otro jugador usa join_room(código).
+
+signal room_ready(code: String)
+signal connected
+signal failed(reason: String)
+
+# >>> CAMBIA ESTO por la URL que te da `wrangler deploy` (usa wss://) <<<
+const SIGNALING_URL := "wss://pacco-signal.TU-SUBDOMINIO.workers.dev"
+const ICE := {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+
+var ws := WebSocketPeer.new()
+var rtc := WebRTCMultiplayerPeer.new()
+var conns := {}
+var my_id := 0
+var room := ""
+var _done := false
+
+func _ready() -> void:
+	set_process(false)
+	multiplayer.peer_connected.connect(_on_peer_connected)
+
+func host_room() -> void:
+	var letters := "ABCDEFGHJKLMNPQRSTUVWXYZ"
+	room = ""
+	for i in 4:
+		room += letters[randi() % letters.length()]
+	_connect_ws("host")
+
+func join_room(code: String) -> void:
+	room = code.strip_edges().to_upper()
+	_connect_ws("join")
+
+func _connect_ws(role: String) -> void:
+	ws = WebSocketPeer.new()
+	rtc = WebRTCMultiplayerPeer.new()
+	conns.clear()
+	_done = false
+	var err := ws.connect_to_url("%s/ws/%s?role=%s" % [SIGNALING_URL, room, role])
+	if err != OK:
+		failed.emit("No se pudo contactar al servidor de señalización")
+		return
+	set_process(true)
+
+func _process(_d: float) -> void:
+	ws.poll()
+	match ws.get_ready_state():
+		WebSocketPeer.STATE_OPEN:
+			while ws.get_available_packet_count() > 0:
+				var m = JSON.parse_string(ws.get_packet().get_string_from_utf8())
+				if m is Dictionary: _on_msg(m)
+		WebSocketPeer.STATE_CLOSED:
+			if not _done: failed.emit("Se cerró la conexión con el servidor")
+			set_process(false)
+
+func _send(d: Dictionary) -> void:
+	ws.send_text(JSON.stringify(d))
+
+func _new_conn(id: int) -> WebRTCPeerConnection:
+	var c := WebRTCPeerConnection.new()
+	c.initialize(ICE)
+	c.session_description_created.connect(func(type: String, sdp: String):
+		c.set_local_description(type, sdp)
+		_send({"type": type, "to": id, "sdp": sdp}))
+	c.ice_candidate_created.connect(func(media: String, index: int, cname: String):
+		_send({"type": "candidate", "to": id, "media": media, "index": index, "name": cname}))
+	conns[id] = c
+	rtc.add_peer(c, id)
+	return c
+
+func _on_msg(m: Dictionary) -> void:
+	match m.get("type", ""):
+		"welcome":
+			my_id = int(m["id"])
+			if my_id == 1:
+				rtc.create_server()
+				room_ready.emit(room)
+			else:
+				rtc.create_client(my_id)
+			multiplayer.multiplayer_peer = rtc
+		"error":
+			_done = true
+			failed.emit(_reason(str(m.get("reason", ""))))
+			ws.close()
+		"peer_joined":
+			_new_conn(int(m["id"])).create_offer()
+		"offer":
+			_new_conn(int(m["from"])).set_remote_description("offer", m["sdp"])
+		"answer":
+			if conns.has(int(m["from"])):
+				conns[int(m["from"])].set_remote_description("answer", m["sdp"])
+		"candidate":
+			if conns.has(int(m["from"])):
+				conns[int(m["from"])].add_ice_candidate(m["media"], int(m["index"]), m["name"])
+
+func _reason(r: String) -> String:
+	match r:
+		"no_room": return "Esa sala no existe"
+		"room_full": return "La sala ya está llena"
+		"room_taken": return "Código en uso, intenta de nuevo"
+	return "Error de conexión"
+
+func _on_peer_connected(_id: int) -> void:
+	_done = true
+	ws.close()
+	connected.emit()
+
+func leave() -> void:
+	multiplayer.multiplayer_peer = null
+	conns.clear()
