@@ -85,8 +85,8 @@ func _input(event: InputEvent) -> void:
 				_apply_swipe(delta)
 				touch_moved[drag.index] = true
 
-	# En algunas versiones de Safari/Godot Web, el toque se entrega como ratón.
-	# Si acaba de llegar un evento táctil, ignora el ratón emulado para no duplicar gestos.
+	# Fallback para plataformas que entregan la entrada como ratón.
+	# Los eventos emulados se filtran por device; los clics físicos siguen funcionando.
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		# Godot marca con DEVICE_ID_EMULATION el ratón generado desde el tacto.
 		# El gesto táctil ya se procesa arriba; ignora solo su duplicado emulado.
