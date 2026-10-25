@@ -1,44 +1,58 @@
 extends Node
-# Swipe = dirección | doble toque = bomba | toque con dos dedos = disparo
+# Controles táctiles visibles para iPhone: cruceta y botones de acción.
 
-var starts := {}
-var multi := false
-var suppress := false
-var last_tap := -10.0
+var layer: CanvasLayer
+var panel: Control
+var active_actions: Array[String] = []
 
-func _input(e: InputEvent) -> void:
-	if e is InputEventScreenTouch:
-		if e.pressed:
-			starts[e.index] = e.position
-			if starts.size() >= 2: multi = true
-		else:
-			var s: Vector2 = starts.get(e.index, e.position)
-			starts.erase(e.index)
-			var tap := e.position.distance_to(s) < 12.0
-			if tap and not suppress:
-				if multi:
-					_fire("shoot")
-					suppress = true
-				else:
-					var now := Time.get_ticks_msec() / 1000.0
-					if now - last_tap < 0.3:
-						_fire("bomb")
-						last_tap = -10.0
-					else:
-						last_tap = now
-			if starts.is_empty():
-				multi = false
-				suppress = false
-	elif e is InputEventScreenDrag:
-		if not starts.has(e.index): return
-		var d: Vector2 = e.position - starts[e.index]
-		if d.length() > 24.0:
-			var a := ""
-			if absf(d.x) > absf(d.y): a = "move_right" if d.x > 0 else "move_left"
-			else: a = "move_down" if d.y > 0 else "move_up"
-			_fire(a)
-			starts[e.index] = e.position
+func _ready() -> void:
+	layer = CanvasLayer.new()
+	layer.layer = 10
+	add_child(layer)
 
-func _fire(a: String) -> void:
-	Input.action_press(a)
-	get_tree().create_timer(0.1).timeout.connect(func(): Input.action_release(a))
+	panel = Control.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.mouse_filter = Control.MOUSE_FILTER_PASS
+	layer.add_child(panel)
+
+	_add_action_button("↑", Vector2(70, 476), Vector2(48, 48), "move_up")
+	_add_action_button("←", Vector2(18, 524), Vector2(48, 48), "move_left")
+	_add_action_button("↓", Vector2(70, 524), Vector2(48, 48), "move_down")
+	_add_action_button("→", Vector2(122, 524), Vector2(48, 48), "move_right")
+	_add_action_button("DISPARO", Vector2(254, 472), Vector2(92, 46), "shoot")
+	_add_action_button("BOMBA", Vector2(254, 524), Vector2(92, 46), "bomb")
+
+func _add_action_button(label: String, pos: Vector2, button_size: Vector2, action: String) -> void:
+	var button := Button.new()
+	button.text = label
+	button.position = pos
+	button.size = button_size
+	button.focus_mode = Control.FOCUS_NONE
+	button.mouse_filter = Control.MOUSE_FILTER_STOP
+	button.add_theme_font_size_override("font_size", 16 if label.length() > 1 else 24)
+	panel.add_child(button)
+
+	button.button_down.connect(func():
+		if not active_actions.has(action):
+			active_actions.append(action)
+		Input.action_press(action)
+	)
+	button.button_up.connect(func():
+		Input.action_release(action)
+		active_actions.erase(action)
+	)
+
+func _process(_delta: float) -> void:
+	var scene = get_tree().current_scene
+	var should_show := scene != null and scene.get("started") == true
+	panel.visible = should_show
+	if not should_show:
+		_release_all()
+
+func _release_all() -> void:
+	for action in active_actions:
+		Input.action_release(action)
+	active_actions.clear()
+
+func _exit_tree() -> void:
+	_release_all()
