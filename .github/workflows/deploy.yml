@@ -25,9 +25,9 @@ jobs:
           archive=/tmp/Godot_v4.3-stable_export_templates.tpz
           temp_dir=/tmp/godot-export-templates
           templates_dir="$HOME/.local/share/godot/export_templates/4.3.stable"
-          curl --fail --location --silent --show-error \
+          wget --quiet --show-progress \
             https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz \
-            --output "$archive"
+            --output-document="$archive"
           mkdir -p "$temp_dir" "$templates_dir"
           unzip -q "$archive" -d "$temp_dir"
           test -d "$temp_dir/templates"
