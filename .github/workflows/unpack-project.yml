@@ -1,0 +1,54 @@
+name: Unpack PacCo-op source archive
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "pacco-op.zip"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Extract project files into repository root
+        run: |
+          python3 - <<'PY'
+          import zipfile
+          from pathlib import Path
+
+          archive = Path("pacco-op.zip")
+          with zipfile.ZipFile(archive) as z:
+              entries = z.namelist()
+              prefix = "pacco-op/"
+              if not any(name.startswith(prefix) for name in entries):
+                  raise SystemExit("ZIP does not contain the expected pacco-op/ directory")
+              for info in z.infolist():
+                  name = info.filename
+                  if not name.startswith(prefix) or name.endswith("/"):
+                      continue
+                  relative = Path(name[len(prefix):])
+                  if relative.is_absolute() or ".." in relative.parts:
+                      raise SystemExit(f"Unsafe ZIP path: {name}")
+                  target = Path(".") / relative
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  target.write_bytes(z.read(info))
+          PY
+      - name: Commit extracted project files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .gitignore README.md autoload export_presets.cfg icon.svg main.tscn project.godot scripts signaling .github/workflows/deploy.yml
+          if git diff --cached --quiet; then
+            echo "No extracted project changes to commit."
+          else
+            git commit -m "Extract PacCo-op project files from source archive"
+            git push
+          fi
