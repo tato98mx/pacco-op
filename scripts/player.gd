@@ -48,12 +48,18 @@ func _physics_process(delta: float) -> void:
 		elif d != Vector2i.ZERO and d != _last_sent:
 			_last_sent = d
 			submit_dir.rpc_id(1, d)
-		if Input.is_action_just_pressed("bomb"):
+
+		# Consume las solicitudes táctiles aunque también haya una entrada física.
+		var scene := get_tree().current_scene
+		var controls: Node = scene.get_node_or_null("TouchControls") if scene != null else null
+		var touch_bomb := controls != null and controls.consume_action("bomb")
+		var touch_shoot := controls != null and controls.consume_action("shoot")
+		if Input.is_action_just_pressed("bomb") or touch_bomb:
 			if multiplayer.is_server():
 				request_bomb()
 			else:
 				request_bomb.rpc_id(1)
-		if Input.is_action_just_pressed("shoot"):
+		if Input.is_action_just_pressed("shoot") or touch_shoot:
 			if multiplayer.is_server():
 				request_shoot()
 			else:
