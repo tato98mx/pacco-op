@@ -15,21 +15,27 @@ func _ready() -> void:
 	panel.mouse_filter = Control.MOUSE_FILTER_PASS
 	layer.add_child(panel)
 
-	_add_action_button("↑", Vector2(70, 476), Vector2(48, 48), "move_up")
-	_add_action_button("←", Vector2(18, 524), Vector2(48, 48), "move_left")
-	_add_action_button("↓", Vector2(70, 524), Vector2(48, 48), "move_down")
-	_add_action_button("→", Vector2(122, 524), Vector2(48, 48), "move_right")
-	_add_action_button("DISPARO", Vector2(254, 472), Vector2(92, 46), "shoot")
-	_add_action_button("BOMBA", Vector2(254, 524), Vector2(92, 46), "bomb")
+	_add_bottom_button("↑", 20, -158, 68, -110, "move_up")
+	_add_bottom_button("←", 0, -110, 48, -62, "move_left")
+	_add_bottom_button("↓", 52, -110, 100, -62, "move_down")
+	_add_bottom_button("→", 104, -110, 152, -62, "move_right")
+	_add_bottom_button("DISPARO", -112, -158, -12, -110, "shoot", true)
+	_add_bottom_button("BOMBA", -112, -106, -12, -58, "bomb", true)
 
-func _add_action_button(label: String, pos: Vector2, button_size: Vector2, action: String) -> void:
+func _add_bottom_button(label: String, left: float, top: float, right: float, bottom: float, action: String, from_right: bool = false) -> void:
 	var button := Button.new()
 	button.text = label
-	button.position = pos
-	button.size = button_size
 	button.focus_mode = Control.FOCUS_NONE
 	button.mouse_filter = Control.MOUSE_FILTER_STOP
-	button.add_theme_font_size_override("font_size", 16 if label.length() > 1 else 24)
+	button.add_theme_font_size_override("font_size", 14 if label.length() > 1 else 24)
+	button.anchor_left = 1.0 if from_right else 0.0
+	button.anchor_right = 1.0 if from_right else 0.0
+	button.anchor_top = 1.0
+	button.anchor_bottom = 1.0
+	button.offset_left = left
+	button.offset_top = top
+	button.offset_right = right
+	button.offset_bottom = bottom
 	panel.add_child(button)
 
 	button.button_down.connect(func():
@@ -43,11 +49,8 @@ func _add_action_button(label: String, pos: Vector2, button_size: Vector2, actio
 	)
 
 func _process(_delta: float) -> void:
-	var scene = get_tree().current_scene
-	var should_show := scene != null and scene.get("started") == true
-	panel.visible = should_show
-	if not should_show:
-		_release_all()
+	# Keep the controls visible; the previous scene-property check hid them in Safari.
+	panel.visible = true
 
 func _release_all() -> void:
 	for action in active_actions:
