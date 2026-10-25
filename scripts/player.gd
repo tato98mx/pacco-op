@@ -48,16 +48,8 @@ func _physics_process(delta: float) -> void:
 		elif d != Vector2i.ZERO and d != _last_sent:
 			_last_sent = d
 			submit_dir.rpc_id(1, d)
-		if Input.is_action_just_pressed("bomb"):
-			if multiplayer.is_server():
-				request_bomb()
-			else:
-				request_bomb.rpc_id(1)
-		if Input.is_action_just_pressed("shoot"):
-			if multiplayer.is_server():
-				request_shoot()
-			else:
-				request_shoot.rpc_id(1)
+		if Input.is_action_just_pressed("bomb"): request_bomb.rpc_id(1)
+		if Input.is_action_just_pressed("shoot"): request_shoot.rpc_id(1)
 	if multiplayer.is_server(): _simulate(delta)
 
 @rpc("any_peer", "call_remote", "reliable")
