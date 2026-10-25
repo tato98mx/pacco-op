@@ -3,8 +3,6 @@ name: Unpack PacCo-op source archive
 on:
   push:
     branches: [main]
-    paths:
-      - "pacco-op.zip"
   workflow_dispatch:
 
 permissions:
