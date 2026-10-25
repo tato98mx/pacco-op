@@ -6,7 +6,10 @@ var layer: CanvasLayer
 var hint: Label
 var touch_start: Dictionary = {}
 var touch_moved: Dictionary = {}
+var multitouch_indices: Dictionary = {}
 var two_finger_gesture := false
+var two_finger_shot_queued := false
+var pending_actions: Dictionary = {"bomb": 0, "shoot": 0}
 var swipe_action := ""
 var last_tap_ms := -1000
 var last_tap_pos := Vector2.ZERO
@@ -47,26 +50,33 @@ func _input(event: InputEvent) -> void:
 			touch_moved[e.index] = false
 			if touch_start.size() >= 2:
 				two_finger_gesture = true
+				for index in touch_start:
+					multitouch_indices[index] = true
 		else:
 			if not touch_start.has(e.index):
 				return
 			var start: Vector2 = touch_start[e.index]
 			var delta := e.position - start
-			if delta.length() >= SWIPE_THRESHOLD:
+			if multitouch_indices.has(e.index):
+				if not two_finger_shot_queued:
+					_queue_action("shoot")
+					two_finger_shot_queued = true
+			elif delta.length() >= SWIPE_THRESHOLD:
 				_apply_swipe(delta)
 				touch_moved[e.index] = true
-			elif two_finger_gesture and touch_start.size() >= 2:
-				_pulse_action("shoot")
 			elif not touch_moved.get(e.index, false):
 				_handle_tap(e.position)
 			touch_start.erase(e.index)
 			touch_moved.erase(e.index)
+			multitouch_indices.erase(e.index)
 			if touch_start.is_empty():
 				two_finger_gesture = false
+				two_finger_shot_queued = false
+				multitouch_indices.clear()
 
 	elif event is InputEventScreenDrag:
 		var drag := event as InputEventScreenDrag
-		if touch_start.has(drag.index):
+		if touch_start.has(drag.index) and not multitouch_indices.has(drag.index):
 			var delta := drag.position - touch_start[drag.index]
 			if delta.length() >= SWIPE_THRESHOLD:
 				_apply_swipe(delta)
@@ -108,16 +118,25 @@ func _apply_swipe(delta: Vector2) -> void:
 func _handle_tap(pos: Vector2) -> void:
 	var now := Time.get_ticks_msec()
 	if now - last_tap_ms <= DOUBLE_TAP_MS and pos.distance_to(last_tap_pos) <= DOUBLE_TAP_DISTANCE:
-		_pulse_action("bomb")
+		_queue_action("bomb")
 		last_tap_ms = -1000
 	else:
 		last_tap_ms = now
 		last_tap_pos = pos
 
-func _pulse_action(action: String) -> void:
-	Input.action_press(action)
-	await get_tree().process_frame
-	Input.action_release(action)
+func _queue_action(action: String) -> void:
+	pending_actions[action] = int(pending_actions.get(action, 0)) + 1
+
+func consume_action(action: String) -> bool:
+	var count := int(pending_actions.get(action, 0))
+	if count <= 0:
+		return false
+	pending_actions[action] = count - 1
+	return true
+
+func _clear_pending_actions() -> void:
+	for action in pending_actions:
+		pending_actions[action] = 0
 
 func _process(_delta: float) -> void:
 	var scene := get_tree().current_scene
@@ -125,6 +144,8 @@ func _process(_delta: float) -> void:
 	hint.visible = in_game
 	if not in_game:
 		_release_movement()
+		_clear_pending_actions()
+		last_tap_ms = -1000
 
 func _release_movement() -> void:
 	if swipe_action != "":
@@ -133,3 +154,4 @@ func _release_movement() -> void:
 
 func _exit_tree() -> void:
 	_release_movement()
+	_clear_pending_actions()
