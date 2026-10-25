@@ -1,5 +1,5 @@
 extends Node
-# Controles táctiles visibles para iPhone: cruceta y botones de acción.
+# Controles táctiles responsivos: visibles únicamente durante una partida.
 
 var layer: CanvasLayer
 var panel: Control
@@ -15,14 +15,17 @@ func _ready() -> void:
 	panel.mouse_filter = Control.MOUSE_FILTER_PASS
 	layer.add_child(panel)
 
-	_add_bottom_button("↑", 20, -158, 68, -110, "move_up")
-	_add_bottom_button("←", 0, -110, 48, -62, "move_left")
-	_add_bottom_button("↓", 52, -110, 100, -62, "move_down")
-	_add_bottom_button("→", 104, -110, 152, -62, "move_right")
-	_add_bottom_button("DISPARO", -112, -158, -12, -110, "shoot", true)
-	_add_bottom_button("BOMBA", -112, -106, -12, -58, "bomb", true)
+	# Cruceta en la esquina inferior izquierda, relativa al tamaño real de la pantalla.
+	_add_button("↑", 18, -150, 66, -102, "move_up", false)
+	_add_button("←", 0, -100, 48, -52, "move_left", false)
+	_add_button("↓", 52, -100, 100, -52, "move_down", false)
+	_add_button("→", 104, -100, 152, -52, "move_right", false)
 
-func _add_bottom_button(label: String, left: float, top: float, right: float, bottom: float, action: String, from_right: bool = false) -> void:
+	# Acciones en la esquina inferior derecha.
+	_add_button("DISPARO", -118, -150, -8, -102, "shoot", true)
+	_add_button("BOMBA", -118, -98, -8, -50, "bomb", true)
+
+func _add_button(label: String, left: float, top: float, right: float, bottom: float, action: String, from_right: bool) -> void:
 	var button := Button.new()
 	button.text = label
 	button.focus_mode = Control.FOCUS_NONE
@@ -49,8 +52,11 @@ func _add_bottom_button(label: String, left: float, top: float, right: float, bo
 	)
 
 func _process(_delta: float) -> void:
-	# Keep the controls visible; the previous scene-property check hid them in Safari.
-	panel.visible = true
+	var scene := get_tree().current_scene
+	var in_game := scene != null and bool(scene.get("started"))
+	panel.visible = in_game
+	if not in_game:
+		_release_all()
 
 func _release_all() -> void:
 	for action in active_actions:
