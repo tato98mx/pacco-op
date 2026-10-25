@@ -35,8 +35,8 @@ jobs:
                   relative = Path(name[len(prefix):])
                   if relative.is_absolute() or ".." in relative.parts:
                       raise SystemExit(f"Unsafe ZIP path: {name}")
-                  # network.gd is maintained directly in the repository; the ZIP contains an older copy.
-                  if relative.as_posix() == "autoload/network.gd":
+                  # These files are maintained directly in the repository; the ZIP contains older copies.
+                  if relative.as_posix() in ("autoload/network.gd", "project.godot"):
                       continue
                   target = Path(".") / relative
                   target.parent.mkdir(parents=True, exist_ok=True)
