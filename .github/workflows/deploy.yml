@@ -19,6 +19,21 @@ jobs:
     container: barichello/godot-ci:4.3
     steps:
       - uses: actions/checkout@v4
+      - name: Install Godot 4.3 Web export templates
+        run: |
+          set -eu
+          archive=/tmp/Godot_v4.3-stable_export_templates.tpz
+          temp_dir=/tmp/godot-export-templates
+          templates_dir="$HOME/.local/share/godot/export_templates/4.3.stable"
+          curl --fail --location --silent --show-error \
+            https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz \
+            --output "$archive"
+          mkdir -p "$temp_dir" "$templates_dir"
+          unzip -q "$archive" -d "$temp_dir"
+          test -d "$temp_dir/templates"
+          cp -a "$temp_dir/templates/." "$templates_dir/"
+          test -f "$templates_dir/web_nothreads_debug.zip"
+          test -f "$templates_dir/web_nothreads_release.zip"
       - name: Import + export Web
         run: |
           mkdir -v -p build/web
