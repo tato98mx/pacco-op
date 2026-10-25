@@ -36,7 +36,7 @@ jobs:
                   if relative.is_absolute() or ".." in relative.parts:
                       raise SystemExit(f"Unsafe ZIP path: {name}")
                   # These files are maintained directly in the repository; the ZIP contains older copies.
-                  if relative.as_posix() in ("autoload/network.gd", "project.godot", "scripts/touch_controls.gd"):
+                  if relative.as_posix() in ("autoload/network.gd", "project.godot", "scripts/touch_controls.gd", ".github/workflows/unpack-project.yml"):
                       continue
                   target = Path(".") / relative
                   target.parent.mkdir(parents=True, exist_ok=True)
