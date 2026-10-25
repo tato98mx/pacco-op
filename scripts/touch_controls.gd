@@ -72,6 +72,27 @@ func _input(event: InputEvent) -> void:
 				_apply_swipe(delta)
 				touch_moved[drag.index] = true
 
+	# En algunas versiones de Safari/Godot Web, el toque se entrega como ratón.
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			touch_start[-1] = event.position
+			touch_moved[-1] = false
+		elif touch_start.has(-1):
+			var start: Vector2 = touch_start[-1]
+			var delta := event.position - start
+			if delta.length() >= SWIPE_THRESHOLD:
+				_apply_swipe(delta)
+			elif not touch_moved.get(-1, false):
+				_handle_tap(event.position)
+			touch_start.erase(-1)
+			touch_moved.erase(-1)
+
+	elif event is InputEventMouseMotion and touch_start.has(-1) and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		var delta := event.position - touch_start[-1]
+		if delta.length() >= SWIPE_THRESHOLD:
+			_apply_swipe(delta)
+			touch_moved[-1] = true
+
 func _apply_swipe(delta: Vector2) -> void:
 	var action: String
 	if absf(delta.x) > absf(delta.y):
