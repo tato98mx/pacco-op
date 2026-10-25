@@ -13,11 +13,13 @@ var pending_actions: Dictionary = {"bomb": 0, "shoot": 0}
 var swipe_action := ""
 var last_tap_ms := -1000
 var last_tap_pos := Vector2.ZERO
+var last_screen_event_ms := -1000
 var in_game := false
 
 const SWIPE_THRESHOLD := 26.0
 const DOUBLE_TAP_MS := 330
 const DOUBLE_TAP_DISTANCE := 70.0
+const MOUSE_TOUCH_SUPPRESSION_MS := 500
 
 func _ready() -> void:
 	layer = CanvasLayer.new()
@@ -45,6 +47,10 @@ func _input(event: InputEvent) -> void:
 
 	if event is InputEventScreenTouch:
 		var e := event as InputEventScreenTouch
+		last_screen_event_ms = Time.get_ticks_msec()
+		if e.canceled:
+			_clear_touch_state()
+			return
 		if e.pressed:
 			touch_start[e.index] = e.position
 			touch_moved[e.index] = false
@@ -75,6 +81,7 @@ func _input(event: InputEvent) -> void:
 				multitouch_indices.clear()
 
 	elif event is InputEventScreenDrag:
+		last_screen_event_ms = Time.get_ticks_msec()
 		var drag := event as InputEventScreenDrag
 		if touch_start.has(drag.index) and not multitouch_indices.has(drag.index):
 			var delta := drag.position - touch_start[drag.index]
@@ -83,7 +90,10 @@ func _input(event: InputEvent) -> void:
 				touch_moved[drag.index] = true
 
 	# En algunas versiones de Safari/Godot Web, el toque se entrega como ratón.
+	# Si acaba de llegar un evento táctil, ignora el ratón emulado para no duplicar gestos.
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if not touch_start.has(-1) and (_has_screen_touch() or Time.get_ticks_msec() - last_screen_event_ms <= MOUSE_TOUCH_SUPPRESSION_MS):
+			return
 		if event.pressed:
 			touch_start[-1] = event.position
 			touch_moved[-1] = false
@@ -138,14 +148,28 @@ func _clear_pending_actions() -> void:
 	for action in pending_actions:
 		pending_actions[action] = 0
 
+func _has_screen_touch() -> bool:
+	for index in touch_start:
+		if int(index) != -1:
+			return true
+	return false
+
+func _clear_touch_state() -> void:
+	_release_movement()
+	touch_start.clear()
+	touch_moved.clear()
+	multitouch_indices.clear()
+	two_finger_gesture = false
+	two_finger_shot_queued = false
+	last_tap_ms = -1000
+	_clear_pending_actions()
+
 func _process(_delta: float) -> void:
 	var scene := get_tree().current_scene
 	in_game = scene != null and bool(scene.get("started")) and not GameState.over
 	hint.visible = in_game
 	if not in_game:
-		_release_movement()
-		_clear_pending_actions()
-		last_tap_ms = -1000
+		_clear_touch_state()
 
 func _release_movement() -> void:
 	if swipe_action != "":
