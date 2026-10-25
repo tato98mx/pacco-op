@@ -41,29 +41,33 @@ func _read_dir() -> Vector2i:
 	return Vector2i(0, int(signf(v.y)))
 
 func _physics_process(delta: float) -> void:
-	if peer_id == multiplayer.get_unique_id() and not is_downed and not GameState.over:
-		var d := _read_dir()
-		if multiplayer.is_server():
-			if d != Vector2i.ZERO: want_dir = d
-		elif d != Vector2i.ZERO and d != _last_sent:
-			_last_sent = d
-			submit_dir.rpc_id(1, d)
-
-		# Consume las solicitudes táctiles aunque también haya una entrada física.
+	if peer_id == multiplayer.get_unique_id():
+		# Consume también si el jugador cae o termina la partida, para no guardar
+		# acciones táctiles que se ejecuten después al revivir o reiniciar.
 		var scene := get_tree().current_scene
 		var controls: Node = scene.get_node_or_null("TouchControls") if scene != null else null
 		var touch_bomb := controls != null and controls.consume_action("bomb")
 		var touch_shoot := controls != null and controls.consume_action("shoot")
-		if Input.is_action_just_pressed("bomb") or touch_bomb:
+
+		if not is_downed and not GameState.over:
+			var d := _read_dir()
 			if multiplayer.is_server():
-				request_bomb()
-			else:
-				request_bomb.rpc_id(1)
-		if Input.is_action_just_pressed("shoot") or touch_shoot:
-			if multiplayer.is_server():
-				request_shoot()
-			else:
-				request_shoot.rpc_id(1)
+				if d != Vector2i.ZERO: want_dir = d
+			elif d != Vector2i.ZERO and d != _last_sent:
+				_last_sent = d
+				submit_dir.rpc_id(1, d)
+
+			# La entrada física y la táctil se evalúan por separado.
+			if Input.is_action_just_pressed("bomb") or touch_bomb:
+				if multiplayer.is_server():
+					request_bomb()
+				else:
+					request_bomb.rpc_id(1)
+			if Input.is_action_just_pressed("shoot") or touch_shoot:
+				if multiplayer.is_server():
+					request_shoot()
+				else:
+					request_shoot.rpc_id(1)
 	if multiplayer.is_server(): _simulate(delta)
 
 @rpc("any_peer", "call_remote", "reliable")
