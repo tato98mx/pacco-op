@@ -13,13 +13,11 @@ var pending_actions: Dictionary = {"bomb": 0, "shoot": 0}
 var swipe_action := ""
 var last_tap_ms := -1000
 var last_tap_pos := Vector2.ZERO
-var last_screen_event_ms := -1000
 var in_game := false
 
 const SWIPE_THRESHOLD := 26.0
 const DOUBLE_TAP_MS := 330
 const DOUBLE_TAP_DISTANCE := 70.0
-const MOUSE_TOUCH_SUPPRESSION_MS := 500
 
 func _ready() -> void:
 	layer = CanvasLayer.new()
@@ -47,7 +45,6 @@ func _input(event: InputEvent) -> void:
 
 	if event is InputEventScreenTouch:
 		var e := event as InputEventScreenTouch
-		last_screen_event_ms = Time.get_ticks_msec()
 		if e.canceled:
 			_clear_touch_state()
 			return
@@ -81,7 +78,6 @@ func _input(event: InputEvent) -> void:
 				multitouch_indices.clear()
 
 	elif event is InputEventScreenDrag:
-		last_screen_event_ms = Time.get_ticks_msec()
 		var drag := event as InputEventScreenDrag
 		if touch_start.has(drag.index) and not multitouch_indices.has(drag.index):
 			var delta := drag.position - touch_start[drag.index]
@@ -92,7 +88,9 @@ func _input(event: InputEvent) -> void:
 	# En algunas versiones de Safari/Godot Web, el toque se entrega como ratón.
 	# Si acaba de llegar un evento táctil, ignora el ratón emulado para no duplicar gestos.
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		if not touch_start.has(-1) and (_has_screen_touch() or Time.get_ticks_msec() - last_screen_event_ms <= MOUSE_TOUCH_SUPPRESSION_MS):
+		# Godot marca con DEVICE_ID_EMULATION el ratón generado desde el tacto.
+		# El gesto táctil ya se procesa arriba; ignora solo su duplicado emulado.
+		if event.device == InputEvent.DEVICE_ID_EMULATION:
 			return
 		if event.pressed:
 			touch_start[-1] = event.position
@@ -108,6 +106,8 @@ func _input(event: InputEvent) -> void:
 			touch_moved.erase(-1)
 
 	elif event is InputEventMouseMotion and touch_start.has(-1) and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		if event.device == InputEvent.DEVICE_ID_EMULATION:
+			return
 		var delta := event.position - touch_start[-1]
 		if delta.length() >= SWIPE_THRESHOLD:
 			_apply_swipe(delta)
@@ -147,12 +147,6 @@ func consume_action(action: String) -> bool:
 func _clear_pending_actions() -> void:
 	for action in pending_actions:
 		pending_actions[action] = 0
-
-func _has_screen_touch() -> bool:
-	for index in touch_start:
-		if int(index) != -1:
-			return true
-	return false
 
 func _clear_touch_state() -> void:
 	_release_movement()
