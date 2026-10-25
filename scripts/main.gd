@@ -17,6 +17,7 @@ const PICKUP_RESPAWN := 20.0
 var maze: Maze
 var spawner: MultiplayerSpawner
 var director: Node
+var touch_controls: Node
 var started := false
 var match_ids: Array = []
 
@@ -31,7 +32,9 @@ func _ready() -> void:
 	spawner.spawn_path = NodePath("..")
 	spawner.spawn_function = _make
 	add_child(UIS.new())
-	add_child(TouchS.new())
+	touch_controls = TouchS.new()
+	touch_controls.name = "TouchControls"
+	add_child(touch_controls)
 	Network.connected.connect(_on_connected)
 	multiplayer.peer_disconnected.connect(func(_id): GameState.over = true; GameState.game_over.emit())
 
