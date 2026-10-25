@@ -140,7 +140,7 @@ func _clear_pending_actions() -> void:
 
 func _process(_delta: float) -> void:
 	var scene := get_tree().current_scene
-	in_game = scene != null and bool(scene.get("started"))
+	in_game = scene != null and bool(scene.get("started")) and not GameState.over
 	hint.visible = in_game
 	if not in_game:
 		_release_movement()
