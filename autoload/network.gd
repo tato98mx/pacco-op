@@ -7,14 +7,12 @@ signal connected
 signal failed(reason: String)
 
 # >>> CAMBIA ESTO por la URL que te da `wrangler deploy` (usa wss://) <<<
-const SIGNALING_URL := "wss://pacco-signal.ydfz296yrr.workers.dev"
+const SIGNALING_URL := "wss://pacco-signal.TU-SUBDOMINIO.workers.dev"
 const ICE := {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
 
 var ws := WebSocketPeer.new()
 var rtc := WebRTCMultiplayerPeer.new()
 var conns := {}
-var remote_ready := {}
-var pending_candidates := {}
 var my_id := 0
 var room := ""
 var _done := false
@@ -38,8 +36,6 @@ func _connect_ws(role: String) -> void:
 	ws = WebSocketPeer.new()
 	rtc = WebRTCMultiplayerPeer.new()
 	conns.clear()
-	remote_ready.clear()
-	pending_candidates.clear()
 	_done = false
 	var err := ws.connect_to_url("%s/ws/%s?role=%s" % [SIGNALING_URL, room, role])
 	if err != OK:
@@ -70,8 +66,6 @@ func _new_conn(id: int) -> WebRTCPeerConnection:
 	c.ice_candidate_created.connect(func(media: String, index: int, cname: String):
 		_send({"type": "candidate", "to": id, "media": media, "index": index, "name": cname}))
 	conns[id] = c
-	remote_ready[id] = false
-	pending_candidates[id] = []
 	rtc.add_peer(c, id)
 	return c
 
@@ -92,28 +86,13 @@ func _on_msg(m: Dictionary) -> void:
 		"peer_joined":
 			_new_conn(int(m["id"])).create_offer()
 		"offer":
-			var oid := int(m["from"])
-			_new_conn(oid)
-			_set_remote(oid, "offer", str(m["sdp"]))
+			_new_conn(int(m["from"])).set_remote_description("offer", m["sdp"])
 		"answer":
-			var aid := int(m["from"])
-			if conns.has(aid):
-				_set_remote(aid, "answer", str(m["sdp"]))
+			if conns.has(int(m["from"])):
+				conns[int(m["from"])].set_remote_description("answer", m["sdp"])
 		"candidate":
-			var cid := int(m["from"])
-			if not conns.has(cid): return
-			var candidate := {"media": str(m["media"]), "index": int(m["index"]), "name": str(m["name"])}
-			if remote_ready.get(cid, false):
-				conns[cid].add_ice_candidate(candidate.media, candidate.index, candidate.name)
-			else:
-				pending_candidates[cid].append(candidate)
-
-func _set_remote(id: int, type: String, sdp: String) -> void:
-	conns[id].set_remote_description(type, sdp)
-	remote_ready[id] = true
-	for candidate in pending_candidates.get(id, []):
-		conns[id].add_ice_candidate(candidate.media, candidate.index, candidate.name)
-	pending_candidates[id].clear()
+			if conns.has(int(m["from"])):
+				conns[int(m["from"])].add_ice_candidate(m["media"], int(m["index"]), m["name"])
 
 func _reason(r: String) -> String:
 	match r:
